@@ -7,7 +7,7 @@ try { require('dotenv').config(); } catch {}
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const DOMAIN = process.env.DOMAIN || '';
-const AUDIO_BASE_URL = process.env.AUDIO_BASE_URL || 'https://pub-0110ea35ce894d199dee01a4c041212f.r2.dev/';
+const AUDIO_BASE_URL = process.env.AUDIO_BASE_URL || '';
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -41,8 +41,20 @@ const distDir = path.join(__dirname, 'dist');
 const hasWebBuild = fs.existsSync(path.join(distDir, 'index.html'));
 
 if (hasWebBuild) {
-  // Serve static files (including fonts inside dist/assets/)
-  app.use(express.static(distDir));
+  app.use(express.static(distDir, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.ttf')) {
+        res.setHeader('Content-Type', 'font/ttf');
+      } else if (filePath.endsWith('.woff')) {
+        res.setHeader('Content-Type', 'font/woff');
+      } else if (filePath.endsWith('.woff2')) {
+        res.setHeader('Content-Type', 'font/woff2');
+      }
+      if (filePath.match(/\.(ttf|woff|woff2|js|css)$/)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
 
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
@@ -52,7 +64,7 @@ if (hasWebBuild) {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Quran Player server running on port ${PORT}`);
-  console.log(`Audio Base URL: ${AUDIO_BASE_URL}`);
+  console.log(`Audio Base URL: ${AUDIO_BASE_URL || '(not set - using local fallback)'}`);
   if (DOMAIN) console.log(`Domain: ${DOMAIN}`);
   if (hasWebBuild) console.log('Serving web app from dist/');
 });
