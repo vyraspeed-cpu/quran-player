@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 
 try { require('dotenv').config(); } catch {}
 
@@ -29,6 +30,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// Proxy corrupt font files from CDN using exact hashed filenames
+const FONT_CDN_BASE = 'https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts';
+const FONT_MAP = {
+  'Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf': `${FONT_CDN_BASE}/Ionicons.ttf`,
+  'MaterialCommunityIcons.6e435534bd35da5fef04168860a9b8fa.ttf': `${FONT_CDN_BASE}/MaterialCommunityIcons.ttf`,
+};
+
+app.get('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const cdnUrl = FONT_MAP[filename];
+
+  if (!cdnUrl) return res.status(404).send('Font not found');
+
+  console.log(`Proxying font: ${filename} from CDN`);
+  res.setHeader('Content-Type', 'font/ttf');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+  https.get(cdnUrl, (cdnRes) => {
+    cdnRes.pipe(res);
+  }).on('error', (err) => {
+    console.error('Font proxy error:', err);
+    res.status(500).send('Font proxy failed');
+  });
+});
+
 app.get('/api/config', (req, res) => {
   res.json({ audioBaseUrl: AUDIO_BASE_URL });
 });
@@ -43,13 +69,9 @@ const hasWebBuild = fs.existsSync(path.join(distDir, 'index.html'));
 if (hasWebBuild) {
   app.use(express.static(distDir, {
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.ttf')) {
-        res.setHeader('Content-Type', 'font/ttf');
-      } else if (filePath.endsWith('.woff')) {
-        res.setHeader('Content-Type', 'font/woff');
-      } else if (filePath.endsWith('.woff2')) {
-        res.setHeader('Content-Type', 'font/woff2');
-      }
+      if (filePath.endsWith('.ttf')) res.setHeader('Content-Type', 'font/ttf');
+      else if (filePath.endsWith('.woff')) res.setHeader('Content-Type', 'font/woff');
+      else if (filePath.endsWith('.woff2')) res.setHeader('Content-Type', 'font/woff2');
       if (filePath.match(/\.(ttf|woff|woff2|js|css)$/)) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       }
@@ -64,7 +86,7 @@ if (hasWebBuild) {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Quran Player server running on port ${PORT}`);
-  console.log(`Audio Base URL: ${AUDIO_BASE_URL || '(not set - using local fallback)'}`);
+  console.log(`Audio Base URL: ${AUDIO_BASE_URL || '(not set)'}`);
   if (DOMAIN) console.log(`Domain: ${DOMAIN}`);
   if (hasWebBuild) console.log('Serving web app from dist/');
 });
