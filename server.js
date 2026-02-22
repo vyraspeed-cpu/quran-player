@@ -56,9 +56,9 @@ function fetchWithRedirects(url, res, redirectCount = 0) {
 // Font proxy — MUST be before express.static
 const FONT_MAP = {
   'Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf':
-    'https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf',
+    'https://pub-0110ea35ce894d199dee01a4c041212f.r2.dev/Ionicons.ttf',
   'MaterialCommunityIcons.6e435534bd35da5fef04168860a9b8fa.ttf':
-    'https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf',
+    'https://pub-0110ea35ce894d199dee01a4c041212f.r2.dev/MaterialCommunityIcons.ttf',
 };
 
 app.get('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/:filename', (req, res) => {
