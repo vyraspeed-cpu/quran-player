@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: quran-player
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: AUDIO_BASE_URL
+        value: https://pub-0110ea35ce894d199dee01a4c041212f.r2.dev/
+      - key: DOMAIN
+        value: ""

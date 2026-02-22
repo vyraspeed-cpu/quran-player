@@ -1,0 +1,156 @@
+=============================================
+ QURAN PLAYER - VPS DEPLOYMENT GUIDE
+=============================================
+
+STEP 1: PREPARE YOUR MP3 FILES
+-------------------------------
+Upload your 114 MP3 files to your FTP server.
+Name them: 001.mp3, 002.mp3, 003.mp3, ... 114.mp3
+
+Example folder on your FTP:
+  /public_html/audio/001.mp3
+  /public_html/audio/002.mp3
+  ...
+  /public_html/audio/114.mp3
+
+Your audio URL will be something like:
+  https://yourdomain.com/audio/
+
+
+STEP 2: UPLOAD THIS FOLDER TO YOUR VPS
+---------------------------------------
+Upload the entire vps-deploy folder to your VPS:
+  scp -r vps-deploy/ user@your-vps-ip:/home/user/quran-player/
+
+Or use FileZilla/WinSCP to upload.
+
+
+STEP 3: CONFIGURE
+------------------
+SSH into your VPS:
+  ssh user@your-vps-ip
+
+Go to the app folder:
+  cd /home/user/quran-player
+
+Copy and edit the config:
+  cp .env.example .env
+  nano .env
+
+Set these values:
+  PORT=3000
+  DOMAIN=quran-with-urdu-translation.com
+  AUDIO_BASE_URL=https://yourdomain.com/audio/
+
+
+STEP 4: INSTALL & START
+-------------------------
+Install Node.js (if not already installed):
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+  sudo apt install -y nodejs
+
+Install dependencies:
+  npm install
+
+Start the server:
+  npm start
+
+The app will run on port 3000.
+
+
+STEP 5: KEEP IT RUNNING (PM2)
+-------------------------------
+Install PM2 (process manager):
+  sudo npm install -g pm2
+
+Start with PM2:
+  pm2 start server.js --name "quran-player"
+
+Auto-start on reboot:
+  pm2 startup
+  pm2 save
+
+
+STEP 6: POINT YOUR DOMAIN (NGINX)
+-----------------------------------
+Install Nginx:
+  sudo apt install -y nginx
+
+Create config:
+  sudo nano /etc/nginx/sites-available/quran-player
+
+Paste this (replace your domain):
+
+  server {
+      listen 80;
+      server_name quran-with-urdu-translation.com;
+
+      location / {
+          proxy_pass http://127.0.0.1:3000;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection 'upgrade';
+          proxy_set_header Host $host;
+          proxy_cache_bypass $http_upgrade;
+      }
+  }
+
+Enable the site:
+  sudo ln -s /etc/nginx/sites-available/quran-player /etc/nginx/sites-enabled/
+  sudo nginx -t
+  sudo systemctl restart nginx
+
+
+STEP 7: SSL CERTIFICATE (HTTPS)
+---------------------------------
+Install Certbot:
+  sudo apt install -y certbot python3-certbot-nginx
+
+Get certificate:
+  sudo certbot --nginx -d quran-with-urdu-translation.com
+
+It will auto-renew.
+
+
+STEP 8: UPDATE MEDIAN.CO APP
+------------------------------
+Go to median.co and update your app's URL from:
+  quran-player.replit.app
+to:
+  quran-with-urdu-translation.com
+
+Rebuild and publish the updated APK to Play Store.
+
+
+=============================================
+ FOLDER STRUCTURE
+=============================================
+
+vps-deploy/
+  server.js              <-- The web server (DO NOT EDIT)
+  package.json            <-- Dependencies
+  .env.example            <-- Config template (copy to .env)
+  DEPLOY-INSTRUCTIONS.txt <-- This file
+  dist/                   <-- The web app (DO NOT EDIT)
+    index.html
+    _expo/
+    favicon.ico
+
+
+=============================================
+ TROUBLESHOOTING
+=============================================
+
+App not loading?
+  - Check if Node.js is running: pm2 status
+  - Check logs: pm2 logs quran-player
+  - Make sure port 3000 is not blocked by firewall
+
+Audio not playing?
+  - Make sure MP3 files are accessible at AUDIO_BASE_URL
+  - Test: curl https://yourdomain.com/audio/001.mp3
+  - Check CORS headers on your FTP/file server
+
+Need to rebuild the web app?
+  - You don't! The dist/ folder has the pre-built app
+  - Just edit .env and restart: pm2 restart quran-player
