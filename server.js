@@ -29,14 +29,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Fix: Redirect broken/corrupted font files to CDN
-app.get('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/:font', (req, res) => {
-  const fontName = req.params.font.split('.')[0]; // e.g. "MaterialCommunityIcons"
-  const cdnUrl = `https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.0/build/vendor/react-native-vector-icons/Fonts/${fontName}.ttf`;
-  console.log(`Redirecting font ${fontName} to CDN`);
-  res.redirect(301, cdnUrl);
-});
-
 app.get('/api/config', (req, res) => {
   res.json({ audioBaseUrl: AUDIO_BASE_URL });
 });
@@ -49,6 +41,7 @@ const distDir = path.join(__dirname, 'dist');
 const hasWebBuild = fs.existsSync(path.join(distDir, 'index.html'));
 
 if (hasWebBuild) {
+  // Serve static files (including fonts inside dist/assets/)
   app.use(express.static(distDir));
 
   app.get('*', (req, res) => {
