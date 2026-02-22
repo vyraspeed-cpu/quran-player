@@ -30,39 +30,43 @@ app.use((req, res, next) => {
   next();
 });
 
-// IMPORTANT: Font proxy MUST come before express.static
-// The local .ttf files are corrupt (wrong format), so we proxy from CDN instead
-const FONT_CDN_BASE = 'https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts';
+// Helper to fetch a URL following redirects
+function fetchWithRedirects(url, res, redirectCount = 0) {
+  if (redirectCount > 5) return res.status(500).send('Too many redirects');
+  https.get(url, (cdnRes) => {
+    console.log(`CDN response for ${url}: ${cdnRes.statusCode}`);
+    if (cdnRes.statusCode === 301 || cdnRes.statusCode === 302 || cdnRes.statusCode === 307 || cdnRes.statusCode === 308) {
+      const location = cdnRes.headers.location;
+      console.log(`Redirecting to: ${location}`);
+      cdnRes.resume();
+      fetchWithRedirects(location, res, redirectCount + 1);
+    } else if (cdnRes.statusCode === 200) {
+      res.setHeader('Content-Type', 'font/ttf');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      cdnRes.pipe(res);
+    } else {
+      res.status(cdnRes.statusCode).send('CDN error');
+    }
+  }).on('error', (err) => {
+    console.error('Font fetch error:', err.message);
+    res.status(500).send('Font proxy failed');
+  });
+}
+
+// Font proxy — MUST be before express.static
 const FONT_MAP = {
-  'Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf': `${FONT_CDN_BASE}/Ionicons.ttf`,
-  'MaterialCommunityIcons.6e435534bd35da5fef04168860a9b8fa.ttf': `${FONT_CDN_BASE}/MaterialCommunityIcons.ttf`,
+  'Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf':
+    'https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf',
+  'MaterialCommunityIcons.6e435534bd35da5fef04168860a9b8fa.ttf':
+    'https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf',
 };
 
 app.get('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/:filename', (req, res) => {
   const filename = req.params.filename;
   const cdnUrl = FONT_MAP[filename];
   if (!cdnUrl) return res.status(404).send('Font not found');
-
-  console.log(`Proxying font from CDN: ${filename}`);
-  res.setHeader('Content-Type', 'font/ttf');
-  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-
-  https.get(cdnUrl, (cdnRes) => {
-    if (cdnRes.statusCode === 301 || cdnRes.statusCode === 302) {
-      // Follow redirect
-      https.get(cdnRes.headers.location, (redirectRes) => {
-        redirectRes.pipe(res);
-      }).on('error', (err) => {
-        console.error('Font redirect error:', err);
-        res.status(500).send('Font proxy failed');
-      });
-    } else {
-      cdnRes.pipe(res);
-    }
-  }).on('error', (err) => {
-    console.error('Font proxy error:', err);
-    res.status(500).send('Font proxy failed');
-  });
+  console.log(`Proxying font: ${filename}`);
+  fetchWithRedirects(cdnUrl, res);
 });
 
 app.get('/api/config', (req, res) => {
@@ -77,9 +81,7 @@ const distDir = path.join(__dirname, 'dist');
 const hasWebBuild = fs.existsSync(path.join(distDir, 'index.html'));
 
 if (hasWebBuild) {
-  // Static middleware comes AFTER font proxy
   app.use(express.static(distDir));
-
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
     res.sendFile(path.join(distDir, 'index.html'));
