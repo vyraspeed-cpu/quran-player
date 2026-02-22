@@ -30,7 +30,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Proxy corrupt font files from CDN using exact hashed filenames
+// IMPORTANT: Font proxy MUST come before express.static
+// The local .ttf files are corrupt (wrong format), so we proxy from CDN instead
 const FONT_CDN_BASE = 'https://unpkg.com/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts';
 const FONT_MAP = {
   'Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf': `${FONT_CDN_BASE}/Ionicons.ttf`,
@@ -40,15 +41,24 @@ const FONT_MAP = {
 app.get('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/:filename', (req, res) => {
   const filename = req.params.filename;
   const cdnUrl = FONT_MAP[filename];
-
   if (!cdnUrl) return res.status(404).send('Font not found');
 
-  console.log(`Proxying font: ${filename} from CDN`);
+  console.log(`Proxying font from CDN: ${filename}`);
   res.setHeader('Content-Type', 'font/ttf');
   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
 
   https.get(cdnUrl, (cdnRes) => {
-    cdnRes.pipe(res);
+    if (cdnRes.statusCode === 301 || cdnRes.statusCode === 302) {
+      // Follow redirect
+      https.get(cdnRes.headers.location, (redirectRes) => {
+        redirectRes.pipe(res);
+      }).on('error', (err) => {
+        console.error('Font redirect error:', err);
+        res.status(500).send('Font proxy failed');
+      });
+    } else {
+      cdnRes.pipe(res);
+    }
   }).on('error', (err) => {
     console.error('Font proxy error:', err);
     res.status(500).send('Font proxy failed');
@@ -67,16 +77,8 @@ const distDir = path.join(__dirname, 'dist');
 const hasWebBuild = fs.existsSync(path.join(distDir, 'index.html'));
 
 if (hasWebBuild) {
-  app.use(express.static(distDir, {
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.ttf')) res.setHeader('Content-Type', 'font/ttf');
-      else if (filePath.endsWith('.woff')) res.setHeader('Content-Type', 'font/woff');
-      else if (filePath.endsWith('.woff2')) res.setHeader('Content-Type', 'font/woff2');
-      if (filePath.match(/\.(ttf|woff|woff2|js|css)$/)) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      }
-    }
-  }));
+  // Static middleware comes AFTER font proxy
+  app.use(express.static(distDir));
 
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
