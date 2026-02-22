@@ -19,16 +19,6 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    if (req.path.startsWith('/api') || req.path.endsWith('.ttf')) {
-      console.log(`${req.method} ${req.path} ${res.statusCode} in ${Date.now() - start}ms`);
-    }
-  });
-  next();
-});
-
 app.get('/api/config', (req, res) => {
   res.json({ audioBaseUrl: AUDIO_BASE_URL });
 });
@@ -42,6 +32,7 @@ const hasWebBuild = fs.existsSync(path.join(distDir, 'index.html'));
 
 if (hasWebBuild) {
   const fontsDir = path.join(distDir, 'fonts');
+
   app.use('/fonts', express.static(fontsDir, {
     setHeaders: (res) => {
       res.setHeader('Content-Type', 'font/ttf');
@@ -50,25 +41,29 @@ if (hasWebBuild) {
     }
   }));
 
-  const vectorIconFontsDir = path.join(distDir, 'assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts');
-  app.use('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts', express.static(vectorIconFontsDir, {
-    setHeaders: (res) => {
+  const fontMap = {};
+  if (fs.existsSync(fontsDir)) {
+    fs.readdirSync(fontsDir).forEach(f => {
+      fontMap[f.replace('.ttf', '').toLowerCase()] = path.join(fontsDir, f);
+    });
+  }
+
+  app.get('*.ttf', (req, res) => {
+    const reqPath = decodeURIComponent(req.path);
+    const basename = path.basename(reqPath, '.ttf').replace(/\.[a-f0-9]+$/, '').toLowerCase();
+    const fontFile = fontMap[basename];
+    if (fontFile && fs.existsSync(fontFile)) {
       res.setHeader('Content-Type', 'font/ttf');
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       res.setHeader('Access-Control-Allow-Origin', '*');
+      return res.sendFile(fontFile);
     }
-  }));
+    res.status(404).end();
+  });
 
   app.use(express.static(distDir, {
     setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.ttf')) {
-        res.setHeader('Content-Type', 'font/ttf');
-      } else if (filePath.endsWith('.woff')) {
-        res.setHeader('Content-Type', 'font/woff');
-      } else if (filePath.endsWith('.woff2')) {
-        res.setHeader('Content-Type', 'font/woff2');
-      }
-      if (filePath.match(/\.(ttf|woff|woff2|js|css|png)$/)) {
+      if (filePath.match(/\.(js|css|png|jpg|ico)$/)) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       }
     }
@@ -76,6 +71,9 @@ if (hasWebBuild) {
 
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
+    if (req.path.match(/\.(ttf|woff|woff2|eot|svg|png|jpg|gif|mp3|mp4)$/)) {
+      return res.status(404).end();
+    }
     res.sendFile(path.join(distDir, 'index.html'));
   });
 }
