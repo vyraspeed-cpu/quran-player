@@ -1,7 +1,6 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const https = require('https');
 
 try { require('dotenv').config(); } catch {}
 
@@ -23,50 +22,11 @@ app.use(express.json());
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
-    if (req.path.startsWith('/api')) {
+    if (req.path.startsWith('/api') || req.path.endsWith('.ttf')) {
       console.log(`${req.method} ${req.path} ${res.statusCode} in ${Date.now() - start}ms`);
     }
   });
   next();
-});
-
-// Helper to fetch a URL following redirects
-function fetchWithRedirects(url, res, redirectCount = 0) {
-  if (redirectCount > 5) return res.status(500).send('Too many redirects');
-  https.get(url, (cdnRes) => {
-    console.log(`CDN response for ${url}: ${cdnRes.statusCode}`);
-    if (cdnRes.statusCode === 301 || cdnRes.statusCode === 302 || cdnRes.statusCode === 307 || cdnRes.statusCode === 308) {
-      const location = cdnRes.headers.location;
-      console.log(`Redirecting to: ${location}`);
-      cdnRes.resume();
-      fetchWithRedirects(location, res, redirectCount + 1);
-    } else if (cdnRes.statusCode === 200) {
-      res.setHeader('Content-Type', 'font/ttf');
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      cdnRes.pipe(res);
-    } else {
-      res.status(cdnRes.statusCode).send('CDN error');
-    }
-  }).on('error', (err) => {
-    console.error('Font fetch error:', err.message);
-    res.status(500).send('Font proxy failed');
-  });
-}
-
-// Font proxy — MUST be before express.static
-const FONT_MAP = {
-  'Ionicons.b4eb097d35f44ed943676fd56f6bdc51.ttf':
-    'https://pub-0110ea35ce894d199dee01a4c041212f.r2.dev/Ionicons.ttf',
-  'MaterialCommunityIcons.6e435534bd35da5fef04168860a9b8fa.ttf':
-    'https://pub-0110ea35ce894d199dee01a4c041212f.r2.dev/MaterialCommunityIcons.ttf',
-};
-
-app.get('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/:filename', (req, res) => {
-  const filename = req.params.filename;
-  const cdnUrl = FONT_MAP[filename];
-  if (!cdnUrl) return res.status(404).send('Font not found');
-  console.log(`Proxying font: ${filename}`);
-  fetchWithRedirects(cdnUrl, res);
 });
 
 app.get('/api/config', (req, res) => {
@@ -81,7 +41,39 @@ const distDir = path.join(__dirname, 'dist');
 const hasWebBuild = fs.existsSync(path.join(distDir, 'index.html'));
 
 if (hasWebBuild) {
-  app.use(express.static(distDir));
+  const fontsDir = path.join(distDir, 'fonts');
+  app.use('/fonts', express.static(fontsDir, {
+    setHeaders: (res) => {
+      res.setHeader('Content-Type', 'font/ttf');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+  }));
+
+  const vectorIconFontsDir = path.join(distDir, 'assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts');
+  app.use('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts', express.static(vectorIconFontsDir, {
+    setHeaders: (res) => {
+      res.setHeader('Content-Type', 'font/ttf');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+  }));
+
+  app.use(express.static(distDir, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.ttf')) {
+        res.setHeader('Content-Type', 'font/ttf');
+      } else if (filePath.endsWith('.woff')) {
+        res.setHeader('Content-Type', 'font/woff');
+      } else if (filePath.endsWith('.woff2')) {
+        res.setHeader('Content-Type', 'font/woff2');
+      }
+      if (filePath.match(/\.(ttf|woff|woff2|js|css|png)$/)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
+
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
     res.sendFile(path.join(distDir, 'index.html'));
@@ -90,7 +82,7 @@ if (hasWebBuild) {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Quran Player server running on port ${PORT}`);
-  console.log(`Audio Base URL: ${AUDIO_BASE_URL || '(not set)'}`);
+  console.log(`Audio Base URL: ${AUDIO_BASE_URL || '(not set - using local fallback)'}`);
   if (DOMAIN) console.log(`Domain: ${DOMAIN}`);
   if (hasWebBuild) console.log('Serving web app from dist/');
 });
