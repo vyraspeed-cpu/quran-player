@@ -7,7 +7,9 @@ try { require('dotenv').config(); } catch {}
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const DOMAIN = process.env.DOMAIN || '';
-const AUDIO_BASE_URL = process.env.AUDIO_BASE_URL;
+const AUDIO_BASE_URL = process.env.AUDIO_BASE_URL || 'https://audio.tilawat.org/';
+
+console.log(process.env, process.env.AUDIO_BASE_URL)
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
