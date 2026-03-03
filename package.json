@@ -1,13 +1,16 @@
 {
-  "name": "quran-player-vps",
+  "name": "quran-player",
   "version": "1.0.0",
-  "description": "Quran with Urdu Tarjuma - Standalone VPS Deployment",
+  "description": "Quran with Urdu Tarjuma",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "dotenv": "^16.4.0",
+    "expo": "^55.0.4",
     "express": "^4.21.0",
-    "dotenv": "^16.4.0"
+    "react-dom": "19.2.0",
+    "react-native-web": "^0.21.0"
   }
 }
