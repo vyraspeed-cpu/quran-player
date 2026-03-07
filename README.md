@@ -2,7 +2,7 @@
 
 A Quran Player web app featuring all 114 Surahs with recitation by Mishary Rashid and Urdu translation by Shamshad Ali Khan.
 
-Live: [quran-with-urdu-translation.com](https://app.tilawat.org)
+Live: https://app.tilawat.org
 
 ---
 
