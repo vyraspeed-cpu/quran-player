@@ -1,13 +1,13 @@
 #!/bin/bash
 # ============================================
-# Local Test - Run vps-deploy locally
+# Local Test - Run server locally
 # ============================================
 # Usage: bash local-test.sh
 # ============================================
 
-cd "$(dirname "$0")/vps-deploy"
-
 echo "Open: http://localhost:3000"
 echo "Press Ctrl+C to stop"
 
-PORT=3000 AUDIO_BASE_URL=https://audio.tilawat.org/ node server.js
+export PORT=3000
+export AUDIO_BASE_URL=https://audio.tilawat.org/
+node server.js
